@@ -43,7 +43,7 @@
 | :--- | :--- | :--- |
 | `pdf_path` | Путь к PDF файлу со статьей (Обязательно). | - |
 | `--output`, `output` | Путь для сохранения итогового `.jsonl` файла. | `outputs/dataset.jsonl` |
-| `--dataset`, `dataset` | Имя датасета на HuggingFace **ИЛИ** путь к локальному файлу (если он существует). | "generator/vanilla_prompts.jsonl" | Локально выкачал с HuggingFace датасет "allenai/wildjailbreak"  потому чтол он закрытый а ide стабильно косячил с токеном.
+| `--dataset`, `dataset` | Имя датасета на HuggingFace **ИЛИ** путь к локальному файлу (если он существует). Локально выкачал с HuggingFace датасет "allenai/wildjailbreak"  потому чтол он закрытый а ide стабильно косячил с токеном.| "generator/vanilla_prompts.jsonl" | 
 | `--column`, `column` | Название колонки/поля с исходными (vanilla) промптами. | `vanilla` |
 | `--max-samples`, `max_samples` | Максимальное количество генерируемых примеров. | `None` (все) |
 | `--extract-only` | Только извлечь стратегию в JSON, не генерировать код и данные. | `False` |
