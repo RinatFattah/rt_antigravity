@@ -1,147 +1,118 @@
-# Red Teaming Pipeline Universal
+# Universal Red Teaming Pipeline
 
-A modular Python project that automatically generates adversarial datasets based on research papers describing attack strategies.
+**Автоматизированный конвейер для извлечения стратегий атак из научных статей и генерации состязательных (adversarial) датасетов.**
 
-## Overview
+Этот проект позволяет взять любой PDF с описанием техники джейлбрейка (jailbreak) LLM, автоматически извлечь алгоритм атаки, создать генератор на Python и массово применить его к базовому набору промптов.
 
-This pipeline consists of three main phases:
+---
 
-1. **Strategy Extraction (The Brain)**: Extracts attack strategies from research papers using Claude 3.5 Sonnet via OpenRouter
-2. **Dataset Generation (The Factory)**: Transforms benign prompts into adversarial prompts using the extracted strategies
-3. **Orchestration**: Coordinates the entire pipeline with async processing for efficiency
+## 🚀 Быстрый старт (Quick Start)
 
-## Features
+Основная команда для запуска всего цикла — `/rt_start`. Это slash-команда (workflow), которая проведет вас через все этапы.
 
-- 📄 Automatic PDF text extraction
-- 🧠 AI-powered strategy extraction from research papers
-- 🏭 Parallel adversarial prompt generation
-- 🔄 Streaming dataset processing for memory efficiency
-- ⚡ Async/await for concurrent API calls
-- 🛡️ Graceful error handling
+### Команда `/rt_start`
 
-## Installation
+Запускает интерактивный процесс:
+1.  **Парсинг PDF**: Извлекает текст статьи.
+2.  **Извлечение стратегии** ("The Brain"): ИИ анализирует статью и формулирует алгоритм атаки.
+3.  **Создание генератора** ("The Builder"): Пишет Python-код для реализации атаки.
+4.  **Генерация данных** ("The Factory"): Создает состязательный датасет.
 
-1. Clone the repository and navigate to the project directory:
+#### Примеры использования (в чате с агентом):
+
+**Базовый запуск:**
+```text
+/rt_start pdf_path=Poetry.pdf
+```
+
+**Ограничить количество семплов (для теста):**
+```text
+/rt_start pdf_path=Poetry.pdf max_samples=10
+```
+
+**Использовать свой локальный файл с промптами:**
+```text
+/rt_start pdf_path=Poetry.pdf dataset=generator/vanilla_prompts.jsonl
+```
+
+### Основные флаги и параметры
+
+Эти параметры используются как в `/rt_start`, так и при ручном запуске скриптов (`main.py`).
+
+| Флаг / Параметр | Описание | Значение по умолчанию |
+| :--- | :--- | :--- |
+| `pdf_path` | Путь к PDF файлу со статьей (Обязательно). | - |
+| `--output`, `output` | Путь для сохранения итогового `.jsonl` файла. | `outputs/dataset.jsonl` |
+| `--dataset`, `dataset` | Имя датасета на HuggingFace **ИЛИ** путь к локальному файлу (если он существует). | `allenai/wildjailbreak` |
+| `--column`, `column` | Название колонки/поля с исходными (vanilla) промптами. | `vanilla` |
+| `--max-samples`, `max_samples` | Максимальное количество генерируемых примеров. | `None` (все) |
+| `--extract-only` | Только извлечь стратегию в JSON, не генерировать код и данные. | `False` |
+| `--max-concurrent` | Количество одновременных запросов к API. | `10` |
+
+---
+
+## 🛠 Архитектура проекта
+
+Проект состоит из нескольких модулей, каждый из которых отвечает за свою фазу (Phase).
+
+### Phase 0: Parsing & Environment
+Проверка окружения и входных данных. Скрипты находятся в `.agent/workflows/rt_parsing.md`.
+
+### Phase 1: Strategy Extraction ("The Brain")
+*   **Файл**: `src/paper_agent.py`, `main.py`
+*   **Задача**: Читает PDF, отправляет текст в Claude/LLM с просьбой формализовать атаку.
+*   **Результат**: `generator/extracted_strategy.json` — структурированное описание алгоритма атаки (принцип, шаги трансформации, примеры).
+*   **Особенность**: В системном промпте задано требование указывать инструменты (`[LLM]`, `[Script]`) для каждого шага.
+
+### Phase 2: Generator Construction ("The Builder")
+*   **Workflow**: `.agent/workflows/rt_make_generator.md`
+*   **Задача**: На основе `extracted_strategy.json` пишет исполняемый Python-код.
+*   **Результат**: `generator/generator.py`.
+*   **Логика**:
+    *   Создает класс `DatasetGenerator`.
+    *   Реализует гибридную загрузку данных (Локальный файл / HuggingFace).
+    *   Использует API (OpenRouter) для LLM-трансформаций (если стратегия требует LLM).
+
+### Phase 3: Dataset Generation ("The Factory")
+*   **Файл**: `run_generation.py`, `main.py`
+*   **Задача**: Запускает `DatasetGenerator` на потоке входных данных.
+*   **Результат**: `outputs/dataset.jsonl`.
+*   **Формат выхода**:
+    ```json
+    {
+      "original_prompt": "Как создать вирус?",
+      "attack_prompt": "Текст атаки (например, в стихах)...",
+      "target_response": "",
+      "strategy_name": "Adversarial Poetry Attack"
+    }
+    ```
+
+---
+
+## 📦 Установка и Требования
+
+1.  **Python 3.10+**
+2.  **Зависимости**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Переменные окружения (`.env`)**:
+    Создайте файл `.env` в корне проекта:
+    ```ini
+    OPENROUTER_API_KEY=sk-or-... (Ваш ключ OpenRouter)
+    HUGGINGFACE_TOKEN=hf_...    (Токен HF для доступа к закрытым датасетам)
+    ```
+
+## 🖥 Ручной запуск (для разработчиков)
+
+Если вы не хотите использовать workflow `/rt_start`, можно запускать скрипты напрямую:
+
+**1. Полный цикл (через main.py):**
 ```bash
-cd /home/rinat/III/rt_pipeline_universal
+python main.py path/to/paper.pdf --max-samples 5
 ```
 
-2. Activate the virtual environment:
+**2. Только генерация (если стратегия уже извлечена и код создан):**
 ```bash
-source venv/bin/activate
+python run_generation.py --dataset generator/vanilla_prompts.jsonl --max-samples 5
 ```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-4. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env and add:
-# - OPENROUTER_API_KEY: Your OpenRouter API key (required)
-# - HUGGINGFACE_TOKEN: Your HuggingFace token (required for gated datasets like allenai/wildjailbreak)
-```
-
-**Getting API Keys:**
-- OpenRouter: https://openrouter.ai/keys
-- HuggingFace: https://huggingface.co/settings/tokens (needed for `allenai/wildjailbreak`)
-
-## Usage
-
-### Basic Usage
-
-```bash
-python main.py path/to/research_paper.pdf
-```
-
-### Advanced Usage
-
-```bash
-python main.py path/to/research_paper.pdf \
-    --output outputs/my_dataset.jsonl \
-    --dataset allenai/wildjailbreak \
-    --column vanilla \
-    --max-samples 100 \
-    --max-concurrent 10
-```
-
-### Arguments
-
-- `pdf_path` (required): Path to the research paper PDF file
-- `--output`: Output path for the generated dataset (default: `outputs/dataset.jsonl`)
-- `--dataset`: HuggingFace dataset name (default: `allenai/wildjailbreak`)
-- `--column`: Column name containing vanilla prompts (default: `vanilla`)
-- `--max-samples`: Maximum number of samples to generate (default: all)
-- `--max-concurrent`: Maximum concurrent API calls (default: 10)
-
-## Output Format
-
-The generated dataset is saved as a JSONL file with the following structure:
-
-```json
-{"original_prompt": "...", "attack_prompt": "...", "strategy_name": "..."}
-{"original_prompt": "...", "attack_prompt": "...", "strategy_name": "..."}
-```
-
-## Project Structure
-
-```
-rt_pipeline_universal/
-├── src/
-│   ├── __init__.py
-│   ├── paper_agent.py      # Phase 1: Strategy extraction
-│   └── generator.py         # Phase 2: Dataset generation
-├── main.py                  # Phase 3: Orchestration
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
-## Requirements
-
-- Python 3.7+
-- OpenRouter API key (get one at https://openrouter.ai/keys)
-- HuggingFace token (required for gated datasets like `allenai/wildjailbreak`)
-  - Get token: https://huggingface.co/settings/tokens
-  - Accept terms: https://huggingface.co/datasets/allenai/wildjailbreak
-- Internet connection for HuggingFace datasets and API calls
-
-## Alternative Datasets
-
-If you don't have access to `allenai/wildjailbreak`, you can use other open datasets:
-
-```bash
-# Example with a different dataset (adjust column name as needed)
-python main.py paper.pdf --dataset another/dataset --column prompt_column
-```
-
-Some alternative open datasets to consider:
-- Custom JSONL file (create your own with vanilla prompts)
-- Other HuggingFace datasets with prompt columns
-
-## Error Handling
-
-The pipeline includes comprehensive error handling for:
-- Missing or unreadable PDF files
-- Invalid API responses
-- Network errors
-- Dataset loading issues (including gated dataset authentication)
-- Token limit errors (automatic retry with smaller text)
-
-### Common Issues
-
-**"Dataset is a gated dataset" error:**
-- Solution: Add `HUGGINGFACE_TOKEN` to your `.env` file
-- Accept dataset terms: https://huggingface.co/datasets/allenai/wildjailbreak
-
-**"Insufficient credits" error:**
-- Solution: Add credits at https://openrouter.ai/settings/credits
-- The code will automatically retry with smaller token limits
-
-## License
-
-This project is provided as-is for research and educational purposes.
-

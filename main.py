@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Optional
 
 from src.paper_agent import PaperAgent
-from src.generator import DatasetGenerator
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +26,8 @@ async def run_pipeline(
     dataset_name: str = "allenai/wildjailbreak",
     column: str = "vanilla",
     max_samples: Optional[int] = None,
-    max_concurrent: int = 10
+    max_concurrent: int = 10,
+    extract_only: bool = False
 ):
     """Run the complete adversarial dataset generation pipeline.
     
@@ -51,10 +51,17 @@ async def run_pipeline(
         logger.info(f"Extracted strategy: {strategy['strategy_name']}")
         logger.info(f"Core principle: {strategy['core_principle']}")
         
+        if extract_only:
+            logger.info("Extract-only mode enabled. Skipping dataset generation.")
+            return
+        
         # Phase 2: Dataset Generation
         logger.info("=" * 60)
         logger.info("PHASE 2: Dataset Generation (The Factory)")
         logger.info("=" * 60)
+        
+        # Lazy import - only needed when not in extract-only mode
+        from generator.generator import DatasetGenerator
         
         generator = DatasetGenerator(
             strategy=strategy,
@@ -139,6 +146,11 @@ def main():
         default=10,
         help="Maximum concurrent API calls (default: 10)"
     )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Only extract strategy from PDF, skip dataset generation"
+    )
     
     args = parser.parse_args()
     
@@ -149,12 +161,14 @@ def main():
         dataset_name=args.dataset,
         column=args.column,
         max_samples=args.max_samples,
-        max_concurrent=args.max_concurrent
+        max_concurrent=args.max_concurrent,
+        extract_only=args.extract_only
     ))
 
 
 if __name__ == "__main__":
     main()
+
 
 
 
