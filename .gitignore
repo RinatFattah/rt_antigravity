@@ -37,11 +37,6 @@ venv.bak/
 *.swo
 *~
 
-# Outputs
-outputs/
-*.jsonl
-*.json
-
 # Logs
 *.log
 
